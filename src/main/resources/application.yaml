@@ -1,0 +1,30 @@
+spring:
+  application:
+    name: alert-matching-system
+
+# Alert System Configuration
+alert:
+  # Dual-queue matching settings
+  matching:
+    poll-interval: 1s              # How often actors poll queues
+    queue-max-size: 10000          # Max events per symbol queue
+    passivation-timeout: 5m        # Idle timeout for actors
+
+  # Queue monitoring
+  queue:
+    price-queue:
+      enabled: true
+      max-size-per-symbol: 10000
+    alert-user-queue:
+      enabled: true
+      max-size-per-symbol: 1000
+
+# Logging configuration
+logging:
+  level:
+    root: INFO
+    org.example.alert: DEBUG
+    org.apache.pekko: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
