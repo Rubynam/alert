@@ -1,14 +1,15 @@
 package org.example.alert.domain.logic.consumer.actor;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.Behavior;
 import org.apache.pekko.actor.typed.javadsl.AbstractBehavior;
 import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.Receive;
-import org.example.alert.domain.logic.matching.SymbolMatchingCoordinator;
+import org.example.alert.domain.logic.queue.actor.PriceQueueActor;
+import org.example.alert.domain.model.ActorCommand;
 import org.example.alert.domain.model.queue.InternalPriceEvent;
-import org.example.alert.infrastructure.queue.PriceQueue;
 
 @Slf4j
 public class PriceEventConsumerActor extends AbstractBehavior<IngressActorCommand> {
@@ -17,27 +18,22 @@ public class PriceEventConsumerActor extends AbstractBehavior<IngressActorComman
 
     // ==================== DEPENDENCIES ====================
 
-    private final PriceQueue priceQueue;
-    private final SymbolMatchingCoordinator coordinator;
-
+    private final ActorRef<ActorCommand> priceQueueActor;
 
     // ==================== BEHAVIOR FACTORY ====================
 
     public static Behavior<IngressActorCommand> create(
-            PriceQueue priceQueue,
-            SymbolMatchingCoordinator coordinator) {
+            ActorRef<ActorCommand> priceQueueActor) {
         return Behaviors.setup(context ->
-            new PriceEventConsumerActor(context, priceQueue, coordinator)
+            new PriceEventConsumerActor(context, priceQueueActor)
         );
     }
 
     private PriceEventConsumerActor(
             ActorContext<IngressActorCommand> context,
-            PriceQueue priceQueue,
-            SymbolMatchingCoordinator coordinator) {
+            ActorRef<ActorCommand> priceQueueActor) {
         super(context);
-        this.priceQueue = priceQueue;
-        this.coordinator = coordinator;
+        this.priceQueueActor = priceQueueActor;
 
         log.info("PriceEventConsumerActor started");
     }
@@ -56,20 +52,19 @@ public class PriceEventConsumerActor extends AbstractBehavior<IngressActorComman
         return this;
     }
 
+    /**
+     * Push price event to PriceQueueActor via Pekko messaging (Task 8)
+     */
     private void pushToPriceQueue(InternalPriceEvent internalPriceEvent) {
         try {
+            // Send to PriceQueueActor via Pekko messaging
+            priceQueueActor.tell(new PriceQueueActor.Enqueue(internalPriceEvent));
 
-
-            // Push to PriceQueue
-            priceQueue.enqueue(internalPriceEvent);
-            final String symbol = internalPriceEvent.getSymbol();
-            final String source = internalPriceEvent.getSource();
-
-            // Register symbol with coordinator (first-time only)
-            coordinator.registerSymbol(source, symbol);
+            log.trace("Sent price event to PriceQueueActor for {}:{}",
+                internalPriceEvent.getSource(), internalPriceEvent.getSymbol());
 
         } catch (Exception e) {
-            log.error("Error pushing to PriceQueue: {}", e.getMessage(), e);
+            log.error("Error sending to PriceQueueActor: {}", e.getMessage(), e);
             throw e; // Re-throw to prevent commit
         }
     }

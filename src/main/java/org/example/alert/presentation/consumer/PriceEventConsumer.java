@@ -1,7 +1,6 @@
 package org.example.alert.presentation.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.ImmutablePair;
@@ -21,9 +20,8 @@ import org.apache.pekko.stream.javadsl.Sink;
 import org.example.alert.application.port.InternalMessageTransform;
 import org.example.alert.domain.logic.consumer.actor.IngressActorCommand;
 import org.example.alert.domain.logic.consumer.actor.PriceEventConsumerActor;
-import org.example.alert.domain.logic.matching.SymbolMatchingCoordinator;
+import org.example.alert.domain.logic.fetcher.AlertFetcherCoordinator;
 import org.example.alert.domain.model.queue.PriceEventMessage;
-import org.example.alert.infrastructure.queue.PriceQueue;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
@@ -39,8 +37,7 @@ public class PriceEventConsumer {
 
     private final ObjectMapper objectMapper;
     private final ActorSystem<?> actorSystem;
-    private final PriceQueue priceQueue;
-    private final SymbolMatchingCoordinator coordinator;
+    private final AlertFetcherCoordinator alertFetcherCoordinator;
     private final InternalMessageTransform internalMessageTransform;
 
     private ActorRef<IngressActorCommand> consumerActor;
@@ -58,15 +55,15 @@ public class PriceEventConsumer {
     private int backpressureBufferSize;
 
     /**
-     * Initialize the consumer actor on application startup
+     * Initialize the consumer actor on application startup (Task 8)
      */
     @EventListener(ApplicationReadyEvent.class)
     public void init() {
         log.info("Initializing PriceEventConsumerActor");
 
-        // Create the consumer actor
+        // Create the consumer actor - Task 8: pass PriceQueueActor
         consumerActor = actorSystem.systemActorOf(
-            PriceEventConsumerActor.create(priceQueue, coordinator),
+            PriceEventConsumerActor.create(alertFetcherCoordinator.getPriceQueueActor()),
             "priceEventConsumer",
             org.apache.pekko.actor.typed.DispatcherSelector.defaultDispatcher()
         );

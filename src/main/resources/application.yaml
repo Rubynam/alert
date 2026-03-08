@@ -46,6 +46,8 @@ alert:
     poll-interval: 1s              # How often actors poll queues
     queue-max-size: 10000          # Max events per symbol queue
     passivation-timeout: 5m        # Idle timeout for actors
+    batch-size: 100                # Batch size for dequeuing from queues
+    spawn-threshold: 500           # Queue size threshold to spawn new matching actors
 
   # Queue monitoring
   queue:

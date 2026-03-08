@@ -7,8 +7,6 @@ import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.Receive;
 import org.apache.pekko.cluster.sharding.typed.javadsl.ClusterSharding;
-import org.example.alert.domain.logic.matching.SymbolMatchingCoordinator;
-import org.example.alert.domain.logic.matching.actor.SymbolMatchingActor;
 import org.example.alert.domain.model.ActorCommand;
 import org.example.alert.domain.model.enums.AlertStatus;
 import org.example.alert.domain.model.enums.FrequencyCondition;
@@ -204,13 +202,13 @@ public class AlertManagerActor extends AbstractBehavior<ActorCommand> {
             String shardKey = source + ":" + symbol;
 
             // Get entity reference for SymbolMatchingActor via ClusterSharding
-            var matchingActorRef = clusterSharding.entityRefFor(
-                SymbolMatchingCoordinator.SYMBOL_MATCHING_ENTITY_KEY,
-                shardKey
-            );
-
-            // Send RemoveAlert command directly via Pekko messaging
-            matchingActorRef.tell(new SymbolMatchingActor.RemoveAlert(alertId));
+//            var matchingActorRef = clusterSharding.entityRefFor(
+//                SymbolMatchingCoordinator.SYMBOL_MATCHING_ENTITY_KEY,
+//                shardKey
+//            );
+//
+//            // Send RemoveAlert command directly via Pekko messaging
+//            matchingActorRef.tell(new SymbolMatchingActor.RemoveAlert(alertId));
 
             log.info("Sent REMOVE command for alert {} to SymbolMatchingActor ({}) via Pekko",
                 alertId, shardKey);

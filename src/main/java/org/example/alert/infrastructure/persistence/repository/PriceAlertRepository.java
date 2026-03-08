@@ -20,19 +20,17 @@ import java.util.List;
 @Repository
 public interface PriceAlertRepository extends CassandraRepository<PriceAlertEntity, String> {
 
+    @Query("SELECT count(1) FROM user_alert WHERE status = ?0 ALLOW FILTERING")
+    long countByStatus(String status);
+
     /**
-     * Find alerts by source and symbol, ordered by updated_at DESC (FIFO)
-     * Used by AlertFetcherActor for batch fetching
+     * Find alerts by status with pagination
+     * Used by ClusterBatchFetcherActor for distributed batch fetching
      *
-     * @param source Symbol source (e.g., "BINANCE")
-     * @param symbol Symbol name (e.g., "BTCUSDT")
-     * @param pageable Pagination settings (batch size = 100)
-     * @return Slice of alerts for this source-symbol combination
+     * @param status Alert status (e.g., "ENABLED")
+     * @param pageable Pagination settings for workload distribution
+     * @return Slice of alerts with the specified status
      */
-    @Query("SELECT * FROM user_alert WHERE source = ?0 AND symbol = ?1 ORDER BY updated_at DESC")
-    Slice<PriceAlertEntity> findBySourceAndSymbolOrderByUpdatedAtDesc(
-        String source,
-        String symbol,
-        Pageable pageable
-    );
+    @Query("SELECT * FROM user_alert WHERE status = ?0 ALLOW FILTERING")
+    Slice<PriceAlertEntity> findByStatus(String status, Pageable pageable);
 }
