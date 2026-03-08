@@ -9,7 +9,6 @@ import org.apache.pekko.actor.typed.javadsl.Receive;
 import org.apache.pekko.cluster.sharding.typed.javadsl.ClusterSharding;
 import org.example.alert.domain.logic.matching.SymbolMatchingCoordinator;
 import org.example.alert.domain.logic.matching.actor.SymbolMatchingActor;
-import org.example.alert.domain.model.ActorCommand;
 import org.example.alert.domain.model.enums.AlertCondition;
 import org.example.alert.domain.model.enums.AlertStatus;
 import org.example.alert.domain.model.enums.FrequencyCondition;
@@ -44,14 +43,14 @@ import java.util.List;
  * - Passivated after idle timeout
  */
 @Slf4j
-public class AlertFetcherActor extends AbstractBehavior<ActorCommand> {
+public class AlertFetcherActor extends AbstractBehavior<ActorFetcherCommand> {
 
     // ==================== COMMANDS ====================
 
     /**
      * Command to fetch alerts from database
      */
-    public static class FetchAlerts implements ActorCommand {
+    public static class FetchAlerts implements ActorFetcherCommand {
         private static final FetchAlerts INSTANCE = new FetchAlerts();
 
         private FetchAlerts() {}
@@ -64,7 +63,7 @@ public class AlertFetcherActor extends AbstractBehavior<ActorCommand> {
     /**
      * Get statistics for monitoring
      */
-    public static class GetStats implements ActorCommand {
+    public static class GetStats implements ActorFetcherCommand {
         public GetStats() {}
     }
 
@@ -86,7 +85,7 @@ public class AlertFetcherActor extends AbstractBehavior<ActorCommand> {
 
     // ==================== BEHAVIOR FACTORY ====================
 
-    public static Behavior<ActorCommand> create(
+    public static Behavior<ActorFetcherCommand> create(
             String symbol,
             String source,
             PriceAlertRepository repository,
@@ -97,7 +96,7 @@ public class AlertFetcherActor extends AbstractBehavior<ActorCommand> {
     }
 
     private AlertFetcherActor(
-            ActorContext<ActorCommand> context,
+            ActorContext<ActorFetcherCommand> context,
             String symbol,
             String source,
             PriceAlertRepository repository,
@@ -119,7 +118,7 @@ public class AlertFetcherActor extends AbstractBehavior<ActorCommand> {
     // ==================== MESSAGE HANDLERS ====================
 
     @Override
-    public Receive<ActorCommand> createReceive() {
+    public Receive<ActorFetcherCommand> createReceive() {
         return newReceiveBuilder()
             .onMessage(FetchAlerts.class, this::onFetchAlerts)
             .onMessage(GetStats.class, this::onGetStats)
@@ -135,7 +134,7 @@ public class AlertFetcherActor extends AbstractBehavior<ActorCommand> {
      * 3. Push each alert to AlertUserQueue with ADD operation
      * 4. Schedule next fetch after 1 second
      */
-    private Behavior<ActorCommand> onFetchAlerts(FetchAlerts cmd) {
+    private Behavior<ActorFetcherCommand> onFetchAlerts(FetchAlerts cmd) {
         lastFetchTime = Instant.now();
         try {
             // STEP 1: Fetch alerts from database (FIFO: DESC by updated_at)
@@ -229,7 +228,7 @@ public class AlertFetcherActor extends AbstractBehavior<ActorCommand> {
     /**
      * Handle GetStats - return statistics
      */
-    private Behavior<ActorCommand> onGetStats(GetStats cmd) {
+    private Behavior<ActorFetcherCommand> onGetStats(GetStats cmd) {
         log.info("Stats for AlertFetcherActor {}: , last_fetch={}",
             shardKey,  lastFetchTime);
         return this;
@@ -240,7 +239,7 @@ public class AlertFetcherActor extends AbstractBehavior<ActorCommand> {
     /**
      * Schedule the next fetch after 1 second
      */
-    private Behavior<ActorCommand> scheduleNextFetch() {
+    private Behavior<ActorFetcherCommand> scheduleNextFetch() {
         scheduleFetch();
         return this;
     }

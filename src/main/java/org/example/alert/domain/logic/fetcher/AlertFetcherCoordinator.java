@@ -6,6 +6,7 @@ import org.apache.pekko.actor.typed.ActorSystem;
 import org.apache.pekko.cluster.sharding.typed.javadsl.ClusterSharding;
 import org.apache.pekko.cluster.sharding.typed.javadsl.Entity;
 import org.apache.pekko.cluster.sharding.typed.javadsl.EntityTypeKey;
+import org.example.alert.domain.logic.fetcher.actor.ActorFetcherCommand;
 import org.example.alert.domain.logic.fetcher.actor.AlertFetcherActor;
 import org.example.alert.domain.model.ActorCommand;
 import org.example.alert.infrastructure.persistence.repository.PriceAlertRepository;
@@ -31,8 +32,8 @@ import org.springframework.stereotype.Service;
 @Service
 public class AlertFetcherCoordinator {
 
-    public static final EntityTypeKey<ActorCommand> ALERT_FETCHER_ENTITY_KEY =
-        EntityTypeKey.create(ActorCommand.class, "AlertFetcher");
+    public static final EntityTypeKey<ActorFetcherCommand> ALERT_FETCHER_ENTITY_KEY =
+        EntityTypeKey.create(ActorFetcherCommand.class, "AlertFetcher");
 
     private final ActorSystem<?> actorSystem;
     private final ClusterSharding clusterSharding;
