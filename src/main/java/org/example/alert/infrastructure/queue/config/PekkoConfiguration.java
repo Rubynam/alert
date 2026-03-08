@@ -18,7 +18,7 @@ import jakarta.annotation.PreDestroy;
 @Configuration
 public class PekkoConfiguration {
 
-    private ActorSystem<Void> actorSystem;
+    private ActorSystem<Void> coordinatorActorSystem;
 
     @Bean
     public ActorSystem<Void> actorSystem() {
@@ -29,7 +29,7 @@ public class PekkoConfiguration {
             .withFallback(ConfigFactory.load());
 
         // Create actor system
-        actorSystem = ActorSystem.create(
+        coordinatorActorSystem = ActorSystem.create(
             Behaviors.empty(),
             "AlertMatchingSystem",
             config
@@ -37,14 +37,14 @@ public class PekkoConfiguration {
 
         log.info("Pekko ActorSystem initialized successfully");
 
-        return actorSystem;
+        return coordinatorActorSystem;
     }
 
     @PreDestroy
     public void shutdown() {
-        if (actorSystem != null) {
+        if (coordinatorActorSystem != null) {
             log.info("Shutting down Pekko ActorSystem");
-            actorSystem.terminate();
+            coordinatorActorSystem.terminate();
         }
     }
 }

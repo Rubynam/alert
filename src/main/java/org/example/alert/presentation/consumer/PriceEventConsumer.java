@@ -3,9 +3,9 @@ package org.example.alert.presentation.consumer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.pekko.Done;
 import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.ActorSystem;
 import org.apache.pekko.kafka.ConsumerMessage;
@@ -18,17 +18,18 @@ import org.apache.pekko.stream.javadsl.Keep;
 import org.apache.pekko.stream.javadsl.RestartSource;
 import org.apache.pekko.stream.javadsl.Sink;
 import org.example.alert.application.port.InternalMessageTransform;
+import org.example.alert.domain.logic.consumer.actor.IngressActorCommand;
 import org.example.alert.domain.logic.consumer.actor.PriceEventConsumerActor;
 import org.example.alert.domain.logic.matching.SymbolMatchingCoordinator;
 import org.example.alert.domain.model.queue.PriceEventMessage;
 import org.example.alert.infrastructure.queue.PriceQueue;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
-import jakarta.annotation.PostConstruct;
 import java.time.Duration;
 import java.util.Objects;
-import java.util.concurrent.CompletionStage;
 
 @Service
 @Slf4j
@@ -41,7 +42,7 @@ public class PriceEventConsumer {
     private final SymbolMatchingCoordinator coordinator;
     private final InternalMessageTransform internalMessageTransform;
 
-    private ActorRef<PriceEventConsumerActor.Command> consumerActor;
+    private ActorRef<IngressActorCommand> consumerActor;
 
     @Value("${spring.kafka.bootstrap-servers}")
     private String bootstrapServers;
@@ -58,8 +59,8 @@ public class PriceEventConsumer {
     /**
      * Initialize the consumer actor on application startup
      */
-    @PostConstruct
-    public void init() {
+    @EventListener(ApplicationReadyEvent.class)
+    void init() {
         log.info("Initializing PriceEventConsumerActor");
 
         // Create the consumer actor
@@ -76,7 +77,7 @@ public class PriceEventConsumer {
     /**
      * Start consuming messages from Kafka
      */
-    public CompletionStage<Done> startConsuming() {
+    void startConsuming() {
         log.info("Starting Chart1m Kafka consumer for topic: {} with fault-tolerant restart strategy", inboundTopic);
 
         // Configure Kafka consumer settings with fault tolerance
@@ -104,7 +105,7 @@ public class PriceEventConsumer {
         ).withMaxRestarts(10, Duration.ofMinutes(5)); // Max 10 restarts in 5 minutes window
 
         // Build Akka Streams pipeline with automatic restart on failure
-        return RestartSource.onFailuresWithBackoff(
+        RestartSource.onFailuresWithBackoff(
                         restartSettings,
                         () -> {
                             log.info("(Re)starting Kafka consumer stream for topic: {}", inboundTopic);
@@ -112,7 +113,6 @@ public class PriceEventConsumer {
                             return Consumer.committableSource(consumerSettings, Subscriptions.topics(inboundTopic))
                                     // Backpressure: Buffer up to N messages
                                     .buffer(backpressureBufferSize, OverflowStrategy.backpressure())
-                                    // Parse JSON to Candle1m
                                     .map(msg -> {
                                         try {
                                             String json = msg.record().value();
@@ -125,20 +125,18 @@ public class PriceEventConsumer {
                                         }
                                     })
                                     .filter(Objects::nonNull)
-                                    .map(item->internalMessageTransform.transform(item))
+                                    .map(item -> new ImmutablePair<IngressActorCommand, ConsumerMessage.CommittableOffset>(internalMessageTransform.transform(item.event), item.committableOffset))
 
                                     // BEHAVIOR: Send to actor for processing
-                                    .map(msg -> {
+                                    .map(pair -> {
+                                        var msg = pair.left;
                                         // Tell the actor to process this message
-                                        consumerActor.tell(new PriceEventConsumerActor.ProcessMessage(
-                                            msg.event,
-                                            msg.committableOffset
-                                        ));
+                                        consumerActor.tell(msg);
                                         // Return the committable offset for the stream
-                                        return msg.committableOffset;
+                                        return pair.right;
                                     })
                                     // Note: Commit is now handled by the actor
-                                    .mapAsync(3, offset -> offset.commitJavadsl());
+                                    .mapAsync(3, ConsumerMessage.Committable::commitJavadsl);
                         }
                 )
                 .watchTermination((notUsed, terminated) -> {
@@ -157,13 +155,6 @@ public class PriceEventConsumer {
                 .run(actorSystem);
     }
 
-    private static class MessageWithCommit {
-        final PriceEventMessage event;
-        final ConsumerMessage.CommittableOffset committableOffset;
-
-        MessageWithCommit(PriceEventMessage event, ConsumerMessage.CommittableOffset committableOffset) {
-            this.event = event;
-            this.committableOffset = committableOffset;
-        }
+    private record MessageWithCommit(PriceEventMessage event, ConsumerMessage.CommittableOffset committableOffset) {
     }
 }

@@ -2,6 +2,25 @@ spring:
   application:
     name: alert-matching-system
 
+  # Scylla DB / Cassandra Configuration (Master-Slave)
+  cassandra:
+    contact-points: 127.0.0.1
+    port: 9042
+    keyspace-name: market
+    local-datacenter: ${SCYLLA_DATACENTER:datacenter1}
+    schema-action: none
+    username: market_user
+    password: abc@1234
+    request:
+      timeout: 30s
+      consistency: quorum
+    connection:
+      connect-timeout: 10s
+      init-query-timeout: 10s
+    pool:
+      idle-timeout: 60s
+      heartbeat-interval: 30s
+
   # Kafka Configuration
   kafka:
     bootstrap-servers: localhost:9092
@@ -14,10 +33,10 @@ spring:
 
 # Sink Connector Configuration (Kafka Consumer)
 sink-connector:
-  topic: price-events              # Kafka topic to consume from
+  topic: inbound-symbol-source             # Kafka topic to consume from
   alert:
     enabled: true
-    consumer-group: chart1m-alert-consumer
+    consumer-group: alert-consumer-groups
     backpressure-buffer-size: 1000
 
 # Alert System Configuration

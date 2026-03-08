@@ -180,9 +180,7 @@ public class SymbolMatchingActor extends AbstractBehavior<ActorCommand> {
         BigDecimal previousPrice = state.getPreviousPrice();
 
         // Get enabled alerts
-        List<AlertConfig> enabledAlerts = state.getActiveAlerts().values().stream()
-            .filter(alert -> alert.getStatus() == AlertStatus.ENABLED)
-            .toList();
+        List<AlertConfig> enabledAlerts = state.getActiveAlerts().values().stream().toList();
 
         if (enabledAlerts.isEmpty()) {
             log.trace("No enabled alerts for {}, skipping matching", state.getShardKey());
@@ -201,7 +199,7 @@ public class SymbolMatchingActor extends AbstractBehavior<ActorCommand> {
             log.info("Matched {} alerts for {}: price={} (previous={})",
                 matchedAlerts.size(), state.getShardKey(), currentPrice, previousPrice);
 
-            // TODO: Forward matched alerts to AlertManagerActor
+            // TODO: Forward matched alerts to ø
             // For now, just log the matches
             matchedAlerts.forEach(alert ->
                 log.info("Alert matched: {} - condition: {} - target: {} - current: {}",
