@@ -7,9 +7,10 @@ import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.Receive;
 import org.example.alert.domain.logic.matching.SymbolMatchingState;
+import org.example.alert.domain.model.ActorCommand;
 import org.example.alert.domain.model.enums.AlertStatus;
 import org.example.alert.domain.model.queue.AlertConfig;
-import org.example.alert.domain.model.queue.PriceEvent;
+import org.example.alert.domain.model.queue.InternalPriceEvent;
 import org.example.alert.infrastructure.queue.AlertUserQueue;
 import org.example.alert.infrastructure.queue.PriceQueue;
 
@@ -20,30 +21,21 @@ import java.util.List;
 
 /**
  * SymbolMatchingActor - Handles matching logic for a single symbol
- *
  * Responsibilities:
  * 1. Poll price-queue and alert-queue every second
  * 2. Maintain in-memory alert cache for this symbol
  * 3. Match incoming prices against active alerts
  * 4. Track previous price for cross detection
- *
+ * ------------------------------------------
  * Lifecycle:
  * - Created on-demand via cluster sharding
  * - Scheduled polling every 1 second
  * - Passivated after 5 minutes of inactivity
  */
 @Slf4j
-public class SymbolMatchingActor extends AbstractBehavior<SymbolMatchingActor.Command> {
+public class SymbolMatchingActor extends AbstractBehavior<ActorCommand> {
 
-    // ==================== COMMANDS ====================
-
-    public interface Command {}
-
-    /**
-     * Triggered every 1 second by coordinator
-     * Polls both queues and performs matching
-     */
-    public static class Poll implements Command {
+    public static class Poll implements ActorCommand {
         private static final Poll INSTANCE = new Poll();
 
         private Poll() {}
@@ -56,28 +48,9 @@ public class SymbolMatchingActor extends AbstractBehavior<SymbolMatchingActor.Co
     /**
      * Get statistics for monitoring
      */
-    public static class GetStats implements Command {
+    public static class GetStats implements ActorCommand {
         public GetStats() {}
     }
-
-    public static class StatsResponse {
-        public final String shardKey;
-        public final int activeAlertCount;
-        public final long totalPriceEvents;
-        public final long totalMatches;
-        public final Instant lastPollTime;
-
-        public StatsResponse(String shardKey, int activeAlertCount,
-                           long totalPriceEvents, long totalMatches,
-                           Instant lastPollTime) {
-            this.shardKey = shardKey;
-            this.activeAlertCount = activeAlertCount;
-            this.totalPriceEvents = totalPriceEvents;
-            this.totalMatches = totalMatches;
-            this.lastPollTime = lastPollTime;
-        }
-    }
-
     // ==================== STATE ====================
 
     private final String symbol;
@@ -93,7 +66,7 @@ public class SymbolMatchingActor extends AbstractBehavior<SymbolMatchingActor.Co
 
     // ==================== BEHAVIOR FACTORY ====================
 
-    public static Behavior<Command> create(
+    public static Behavior<ActorCommand> create(
             String symbol,
             String source,
             PriceQueue priceQueue,
@@ -104,7 +77,7 @@ public class SymbolMatchingActor extends AbstractBehavior<SymbolMatchingActor.Co
     }
 
     private SymbolMatchingActor(
-            ActorContext<Command> context,
+            ActorContext<ActorCommand> context,
             String symbol,
             String source,
             PriceQueue priceQueue,
@@ -125,7 +98,7 @@ public class SymbolMatchingActor extends AbstractBehavior<SymbolMatchingActor.Co
     // ==================== MESSAGE HANDLERS ====================
 
     @Override
-    public Receive<Command> createReceive() {
+    public Receive<ActorCommand> createReceive() {
         return newReceiveBuilder()
             .onMessage(Poll.class, this::onPoll)
             .onMessage(GetStats.class, this::onGetStats)
@@ -134,13 +107,12 @@ public class SymbolMatchingActor extends AbstractBehavior<SymbolMatchingActor.Co
 
     /**
      * Handle Poll command - CORE MATCHING LOGIC
-     *
      * Execution flow:
      * 1. Process alert queue changes (ADD/UPDATE/REMOVE)
      * 2. Process price queue events
      * 3. Match prices against active alerts
      */
-    private Behavior<Command> onPoll(Poll cmd) {
+    private Behavior<ActorCommand> onPoll(Poll cmd) {
         state.setLastPollTime(Instant.now());
 
         try {
@@ -149,19 +121,19 @@ public class SymbolMatchingActor extends AbstractBehavior<SymbolMatchingActor.Co
             processAlertConfigs(alertConfigs);
 
             // STEP 2: Process price events
-            List<PriceEvent> priceEvents = priceQueue.dequeueAll(source, symbol);
-            if (priceEvents.isEmpty()) {
+            List<InternalPriceEvent> internalPriceEvents = priceQueue.dequeueAll(source, symbol);
+            if (internalPriceEvents.isEmpty()) {
                 log.trace("No price events for {} in this poll", state.getShardKey());
                 return scheduleNextPoll();
             }
 
-            state.setTotalPriceEvents(state.getTotalPriceEvents() + priceEvents.size());
+            state.setTotalPriceEvents(state.getTotalPriceEvents() + internalPriceEvents.size());
 
             log.debug("Polling {}: {} price events, {} active alerts",
-                state.getShardKey(), priceEvents.size(), state.getAlertCount());
+                state.getShardKey(), internalPriceEvents.size(), state.getAlertCount());
 
             // STEP 3: Process each price event
-            for (PriceEvent event : priceEvents) {
+            for (InternalPriceEvent event : internalPriceEvents) {
                 processPriceEvent(event);
             }
 
@@ -203,7 +175,7 @@ public class SymbolMatchingActor extends AbstractBehavior<SymbolMatchingActor.Co
     /**
      * Process a single price event and match against active alerts
      */
-    private void processPriceEvent(PriceEvent event) {
+    private void processPriceEvent(InternalPriceEvent event) {
         BigDecimal currentPrice = event.getPrice();
         BigDecimal previousPrice = state.getPreviousPrice();
 
@@ -267,7 +239,7 @@ public class SymbolMatchingActor extends AbstractBehavior<SymbolMatchingActor.Co
     /**
      * Handle GetStats - return statistics
      */
-    private Behavior<Command> onGetStats(GetStats cmd) {
+    private Behavior<ActorCommand> onGetStats(GetStats cmd) {
         log.info("Stats for {}: alerts={}, events={}, matches={}",
             state.getShardKey(), state.getAlertCount(),
             state.getTotalPriceEvents(), state.getTotalMatches());
@@ -279,7 +251,7 @@ public class SymbolMatchingActor extends AbstractBehavior<SymbolMatchingActor.Co
     /**
      * Schedule the next poll after 1 second
      */
-    private Behavior<Command> scheduleNextPoll() {
+    private Behavior<ActorCommand> scheduleNextPoll() {
         schedulePoll();
         return this;
     }

@@ -2,6 +2,24 @@ spring:
   application:
     name: alert-matching-system
 
+  # Kafka Configuration
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: alert-consumer-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+
+# Sink Connector Configuration (Kafka Consumer)
+sink-connector:
+  topic: price-events              # Kafka topic to consume from
+  alert:
+    enabled: true
+    consumer-group: chart1m-alert-consumer
+    backpressure-buffer-size: 1000
+
 # Alert System Configuration
 alert:
   # Dual-queue matching settings

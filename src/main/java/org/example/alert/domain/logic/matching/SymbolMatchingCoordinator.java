@@ -6,6 +6,7 @@ import org.apache.pekko.cluster.sharding.typed.javadsl.ClusterSharding;
 import org.apache.pekko.cluster.sharding.typed.javadsl.Entity;
 import org.apache.pekko.cluster.sharding.typed.javadsl.EntityTypeKey;
 import org.example.alert.domain.logic.matching.actor.SymbolMatchingActor;
+import org.example.alert.domain.model.ActorCommand;
 import org.example.alert.infrastructure.queue.AlertUserQueue;
 import org.example.alert.infrastructure.queue.PriceQueue;
 import org.springframework.stereotype.Service;
@@ -27,8 +28,8 @@ import java.util.concurrent.ConcurrentHashMap;
 @Service
 public class SymbolMatchingCoordinator {
 
-    public static final EntityTypeKey<SymbolMatchingActor.Command> SYMBOL_MATCHING_ENTITY_KEY =
-        EntityTypeKey.create(SymbolMatchingActor.Command.class, "SymbolMatching");
+    public static final EntityTypeKey<ActorCommand> SYMBOL_MATCHING_ENTITY_KEY =
+        EntityTypeKey.create(ActorCommand.class, "SymbolMatching");
 
     private final ActorSystem<?> actorSystem;
     private final ClusterSharding clusterSharding;
@@ -99,27 +100,6 @@ public class SymbolMatchingCoordinator {
             );
             matchingRef.tell(SymbolMatchingActor.Poll.instance());
         }
-    }
-
-    /**
-     * Get statistics for a symbol
-     */
-    public void getStats(String source, String symbol) {
-        String shardKey = source + ":" + symbol;
-
-        var matchingRef = clusterSharding.entityRefFor(
-            SYMBOL_MATCHING_ENTITY_KEY,
-            shardKey
-        );
-
-        matchingRef.tell(new SymbolMatchingActor.GetStats());
-    }
-
-    /**
-     * Get all active symbols
-     */
-    public Set<String> getActiveSymbols() {
-        return Set.copyOf(activeSymbols);
     }
 
     @PreDestroy

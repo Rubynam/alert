@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.example.alert.domain.model.queue.AlertConfig;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Queue;
@@ -13,10 +14,10 @@ import java.util.stream.Collectors;
 
 /**
  * AlertUserQueue - In-memory queue for user alert configurations
- *
+ * -------------------------------------
  * Structure: Map<SymbolKey, Queue<AlertConfig>>
  * SymbolKey format: "BINANCE:BTCUSDT"
- *
+ * -------------------------------------
  * Features:
  * 1. Thread-safe concurrent queue per symbol
  * 2. Supports ADD, UPDATE, REMOVE operations
@@ -62,39 +63,13 @@ public class AlertUserQueue {
         }
 
         // Drain all configs from queue
-        List<AlertConfig> configs = queue.stream()
-            .collect(Collectors.toList());
+        List<AlertConfig> configs = new ArrayList<>(queue);
 
         queue.clear();
 
         log.debug("Dequeued {} alert configs for {}", configs.size(), key);
 
         return configs;
-    }
-
-    /**
-     * Get queue size for monitoring
-     */
-    public int getQueueSize(String source, String symbol) {
-        String key = makeKey(source, symbol);
-        Queue<AlertConfig> queue = queues.get(key);
-        return queue != null ? queue.size() : 0;
-    }
-
-    /**
-     * Get total queue count across all symbols
-     */
-    public int getTotalQueueCount() {
-        return queues.size();
-    }
-
-    /**
-     * Get total pending configs across all queues
-     */
-    public long getTotalPendingConfigs() {
-        return queues.values().stream()
-            .mapToInt(Queue::size)
-            .sum();
     }
 
     private String makeKey(String source, String symbol) {

@@ -631,19 +631,19 @@ public class SymbolMatchingActor extends AbstractBehavior<SymbolMatchingActor.Co
             processAlertConfigs(alertConfigs);
 
             // STEP 2: Process price events
-            List<PriceEvent> priceEvents = priceQueue.dequeueAll(source, symbol);
-            if (priceEvents.isEmpty()) {
+            List<PriceEvent> internalPriceEvents = priceQueue.dequeueAll(source, symbol);
+            if (internalPriceEvents.isEmpty()) {
                 log.trace("No price events for {} in this poll", state.getShardKey());
                 return scheduleNextPoll();
             }
 
-            state.setTotalPriceEvents(state.getTotalPriceEvents() + priceEvents.size());
+            state.setTotalPriceEvents(state.getTotalPriceEvents() + internalPriceEvents.size());
 
             log.debug("Polling {}: {} price events, {} active alerts",
-                state.getShardKey(), priceEvents.size(), state.getAlertCount());
+                state.getShardKey(), internalPriceEvents.size(), state.getAlertCount());
 
             // STEP 3: Process each price event
-            for (PriceEvent event : priceEvents) {
+            for (PriceEvent event : internalPriceEvents) {
                 processPriceEvent(event);
             }
 
@@ -967,7 +967,7 @@ public class MatchingAlertService {
             }
 
             // Create PriceEvent
-            PriceEvent priceEvent = new PriceEvent(
+            PriceEvent internalPriceEvent = new PriceEvent(
                 symbol,
                 source,
                 currentPrice,
@@ -976,7 +976,7 @@ public class MatchingAlertService {
             );
 
             // Push to PriceQueue
-            priceQueue.enqueue(priceEvent);
+            priceQueue.enqueue(internalPriceEvent);
 
             // Register symbol with coordinator (first-time only)
             coordinator.registerSymbol(source, symbol);
@@ -1132,7 +1132,7 @@ STEP 1: Kafka Consumer receives message
     price = event.bidPrice       // 65000
 
 STEP 2: Create PriceEvent
-    priceEvent = new PriceEvent(
+    internalPriceEvent = new PriceEvent(
         symbol,
         source,
         price,
@@ -1141,8 +1141,8 @@ STEP 2: Create PriceEvent
     )
 
 STEP 3: Push to PriceQueue
-    priceQueue.enqueue(priceEvent)
-    // Event stored in queue: queues["BINANCE:BTCUSDT"].offer(priceEvent)
+    priceQueue.enqueue(internalPriceEvent)
+    // Event stored in queue: queues["BINANCE:BTCUSDT"].offer(internalPriceEvent)
 
 STEP 4: Register symbol with coordinator (if new)
     coordinator.registerSymbol(source, symbol)
@@ -1230,16 +1230,16 @@ STEP 3: Process alert configuration changes
     END FOR
 
 STEP 4: Dequeue price events
-    priceEvents = priceQueue.dequeueAll(source, symbol)
+    internalPriceEvents = priceQueue.dequeueAll(source, symbol)
     // Returns: [PriceEvent1, PriceEvent2, ...]
 
-    IF priceEvents.isEmpty() THEN
+    IF internalPriceEvents.isEmpty() THEN
         LOG("No price events in this poll cycle")
         GO TO STEP 7
     END IF
 
 STEP 5: Process each price event
-    FOR EACH event IN priceEvents DO
+    FOR EACH event IN internalPriceEvents DO
         currentPrice = event.price
         previousPrice = state.previousPrice
 
@@ -1272,7 +1272,7 @@ STEP 5: Process each price event
     END FOR
 
 STEP 6: Update statistics
-    state.totalPriceEvents += priceEvents.size()
+    state.totalPriceEvents += internalPriceEvents.size()
     state.lastPollTime = Instant.now()
 
 STEP 7: Schedule next poll

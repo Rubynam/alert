@@ -1,4 +1,4 @@
-package org.example.alert.application.config;
+package org.example.alert.infrastructure.queue.config;
 
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;

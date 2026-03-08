@@ -1,7 +1,7 @@
 package org.example.alert.infrastructure.queue;
 
 import lombok.extern.slf4j.Slf4j;
-import org.example.alert.domain.model.queue.PriceEvent;
+import org.example.alert.domain.model.queue.InternalPriceEvent;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
@@ -28,7 +28,7 @@ import java.util.stream.Collectors;
 public class PriceQueue {
 
     // Map: SymbolKey -> Queue<PriceEvent>
-    private final Map<String, Queue<PriceEvent>> queues;
+    private final Map<String, Queue<InternalPriceEvent>> queues;
 
     public PriceQueue() {
         this.queues = new ConcurrentHashMap<>();
@@ -37,10 +37,10 @@ public class PriceQueue {
     /**
      * Enqueue a price event
      */
-    public void enqueue(PriceEvent event) {
+    public void enqueue(InternalPriceEvent event) {
         String key = makeKey(event.getSource(), event.getSymbol());
 
-        Queue<PriceEvent> queue = queues.computeIfAbsent(key,
+        Queue<InternalPriceEvent> queue = queues.computeIfAbsent(key,
             k -> new ConcurrentLinkedQueue<>());
 
         queue.offer(event);
@@ -53,16 +53,16 @@ public class PriceQueue {
      * Dequeue all price events for a symbol (batch operation)
      * Called by SymbolMatchingActor every second
      */
-    public List<PriceEvent> dequeueAll(String source, String symbol) {
+    public List<InternalPriceEvent> dequeueAll(String source, String symbol) {
         String key = makeKey(source, symbol);
 
-        Queue<PriceEvent> queue = queues.get(key);
+        Queue<InternalPriceEvent> queue = queues.get(key);
         if (queue == null || queue.isEmpty()) {
             return List.of();
         }
 
         // Drain all events from queue
-        List<PriceEvent> events = queue.stream()
+        List<InternalPriceEvent> events = queue.stream()
             .collect(Collectors.toList());
 
         queue.clear();
@@ -77,7 +77,7 @@ public class PriceQueue {
      */
     public int getQueueSize(String source, String symbol) {
         String key = makeKey(source, symbol);
-        Queue<PriceEvent> queue = queues.get(key);
+        Queue<InternalPriceEvent> queue = queues.get(key);
         return queue != null ? queue.size() : 0;
     }
 

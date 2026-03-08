@@ -1,8 +1,10 @@
 package org.example.alert.domain.model.queue;
 
 import lombok.AllArgsConstructor;
+import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.example.alert.domain.logic.consumer.actor.IngressActorCommand;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
@@ -14,7 +16,8 @@ import java.time.Instant;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class PriceEvent implements Serializable {
+@Builder
+public class InternalPriceEvent implements Serializable, IngressActorCommand {
     private String symbol;
     private String source;
     private BigDecimal price;
