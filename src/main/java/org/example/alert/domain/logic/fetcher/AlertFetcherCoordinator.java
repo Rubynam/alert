@@ -82,7 +82,7 @@ public class AlertFetcherCoordinator {
                     symbol,
                     source,
                     repository,
-                    alertUserQueue
+                    clusterSharding
                 );
             })
         );

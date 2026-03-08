@@ -6,6 +6,9 @@ import org.apache.pekko.actor.typed.javadsl.AbstractBehavior;
 import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.Receive;
+import org.apache.pekko.cluster.sharding.typed.javadsl.ClusterSharding;
+import org.example.alert.domain.logic.matching.SymbolMatchingCoordinator;
+import org.example.alert.domain.logic.matching.actor.SymbolMatchingActor;
 import org.example.alert.domain.model.ActorCommand;
 import org.example.alert.domain.model.enums.AlertCondition;
 import org.example.alert.domain.model.enums.AlertStatus;
@@ -13,7 +16,6 @@ import org.example.alert.domain.model.enums.FrequencyCondition;
 import org.example.alert.domain.model.queue.AlertConfig;
 import org.example.alert.infrastructure.persistence.entity.PriceAlertEntity;
 import org.example.alert.infrastructure.persistence.repository.PriceAlertRepository;
-import org.example.alert.infrastructure.queue.AlertUserQueue;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Slice;
 
@@ -74,7 +76,7 @@ public class AlertFetcherActor extends AbstractBehavior<ActorCommand> {
 
     // Dependencies
     private final PriceAlertRepository repository;
-    private final AlertUserQueue alertUserQueue;
+    private final ClusterSharding clusterSharding;
 
     // Configuration
     private static final Duration FETCH_INTERVAL = Duration.ofSeconds(1);
@@ -88,9 +90,9 @@ public class AlertFetcherActor extends AbstractBehavior<ActorCommand> {
             String symbol,
             String source,
             PriceAlertRepository repository,
-            AlertUserQueue alertUserQueue) {
+            ClusterSharding clusterSharding) {
         return Behaviors.setup(context ->
-            new AlertFetcherActor(context, symbol, source, repository, alertUserQueue)
+            new AlertFetcherActor(context, symbol, source, repository, clusterSharding)
         );
     }
 
@@ -99,13 +101,13 @@ public class AlertFetcherActor extends AbstractBehavior<ActorCommand> {
             String symbol,
             String source,
             PriceAlertRepository repository,
-            AlertUserQueue alertUserQueue) {
+            ClusterSharding clusterSharding) {
         super(context);
         this.symbol = symbol;
         this.source = source;
         this.shardKey = source + ":" + symbol;
         this.repository = repository;
-        this.alertUserQueue = alertUserQueue;
+        this.clusterSharding = clusterSharding;
         this.lastFetchTime = Instant.now();
 
         // Schedule first fetch
@@ -183,7 +185,7 @@ public class AlertFetcherActor extends AbstractBehavior<ActorCommand> {
     }
 
     /**
-     * Convert PriceAlertEntity to AlertConfig and push to AlertUserQueue
+     * Convert PriceAlertEntity to AlertConfig and send to SymbolMatchingActor via Pekko
      *
      * @param alerts List of alerts fetched from database
      */
@@ -205,13 +207,20 @@ public class AlertFetcherActor extends AbstractBehavior<ActorCommand> {
                     .queuedAt(Instant.now())
                     .build();
 
-                // Push to AlertUserQueue
-                alertUserQueue.enqueue(config);
+                // Get entity reference for SymbolMatchingActor via ClusterSharding
+                var matchingActorRef = clusterSharding.entityRefFor(
+                    SymbolMatchingCoordinator.SYMBOL_MATCHING_ENTITY_KEY,
+                    shardKey
+                );
 
-                log.trace("Pushed alert {} to queue for {}", entity.getAlertId(), shardKey);
+                // Send AddOrUpdateAlert command directly via Pekko messaging
+                matchingActorRef.tell(new SymbolMatchingActor.AddOrUpdateAlert(config));
+
+                log.trace("Sent AddOrUpdateAlert for alert {} to SymbolMatchingActor ({}) via Pekko",
+                    entity.getAlertId(), shardKey);
 
             } catch (Exception e) {
-                log.error("Error pushing alert {} to queue: {}",
+                log.error("Error sending alert {} to SymbolMatchingActor: {}",
                     entity.getAlertId(), e.getMessage());
             }
         }

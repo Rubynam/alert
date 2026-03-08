@@ -1,12 +1,16 @@
 package org.example.alert.domain.logic.matching;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.ActorSystem;
+import org.apache.pekko.actor.typed.DispatcherSelector;
 import org.apache.pekko.cluster.sharding.typed.javadsl.ClusterSharding;
 import org.apache.pekko.cluster.sharding.typed.javadsl.Entity;
 import org.apache.pekko.cluster.sharding.typed.javadsl.EntityTypeKey;
+import org.example.alert.domain.logic.manager.actor.AlertManagerActor;
 import org.example.alert.domain.logic.matching.actor.SymbolMatchingActor;
 import org.example.alert.domain.model.ActorCommand;
+import org.example.alert.infrastructure.persistence.repository.PriceAlertRepository;
 import org.example.alert.infrastructure.queue.AlertUserQueue;
 import org.example.alert.infrastructure.queue.PriceQueue;
 import org.springframework.stereotype.Service;
@@ -35,6 +39,7 @@ public class SymbolMatchingCoordinator {
     private final ClusterSharding clusterSharding;
     private final PriceQueue priceQueue;
     private final AlertUserQueue alertUserQueue;
+    private final ActorRef<ActorCommand> alertManagerActor;
 
     // Track active symbols
     private final Set<String> activeSymbols;
@@ -42,12 +47,22 @@ public class SymbolMatchingCoordinator {
     public SymbolMatchingCoordinator(
             ActorSystem<?> actorSystem,
             PriceQueue priceQueue,
-            AlertUserQueue alertUserQueue) {
+            AlertUserQueue alertUserQueue,
+            PriceAlertRepository priceAlertRepository) {
         this.actorSystem = actorSystem;
         this.clusterSharding = ClusterSharding.get(actorSystem);
         this.priceQueue = priceQueue;
         this.alertUserQueue = alertUserQueue;
         this.activeSymbols = ConcurrentHashMap.newKeySet();
+
+        // Create AlertManagerActor as singleton
+        this.alertManagerActor = actorSystem.systemActorOf(
+            AlertManagerActor.create(priceAlertRepository, clusterSharding),
+            "alertManager",
+            DispatcherSelector.defaultDispatcher()
+        );
+
+        log.info("AlertManagerActor created");
 
         // Initialize cluster sharding
         initializeClusterSharding();
@@ -69,13 +84,14 @@ public class SymbolMatchingCoordinator {
                 String source = parts[0];
                 String symbol = parts[1];
 
-                log.info("Initializing SymbolMatchingActor for {}", entityContext.getEntityId());
+                log.debug("Initializing SymbolMatchingActor for {}", entityContext.getEntityId());
 
                 return SymbolMatchingActor.create(
                     symbol,
                     source,
                     priceQueue,
-                    alertUserQueue
+                    alertUserQueue,
+                    alertManagerActor
                 );
             })
         );
@@ -91,7 +107,7 @@ public class SymbolMatchingCoordinator {
         String shardKey = source + ":" + symbol;
 
         if (activeSymbols.add(shardKey)) {
-            log.info("Registered new symbol for matching: {}", shardKey);
+            log.debug("Registered new symbol for matching: {}", shardKey);
 
             // Trigger actor creation by sending initial poll
             var matchingRef = clusterSharding.entityRefFor(

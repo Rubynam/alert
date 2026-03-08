@@ -5,5 +5,7 @@ package org.example.alert.domain.model.enums;
  */
 public enum AlertStatus {
     ENABLED,
-    DISABLED
+    DISABLED,
+    TRIGGERED,    // Alert has been triggered
+    EXPIRED
 }

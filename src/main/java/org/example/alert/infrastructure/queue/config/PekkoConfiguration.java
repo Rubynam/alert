@@ -2,13 +2,12 @@ package org.example.alert.infrastructure.queue.config;
 
 import com.typesafe.config.Config;
 import com.typesafe.config.ConfigFactory;
+import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pekko.actor.typed.ActorSystem;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
-
-import jakarta.annotation.PreDestroy;
 
 /**
  * Pekko configuration for Spring Boot
@@ -18,21 +17,22 @@ import jakarta.annotation.PreDestroy;
 @Configuration
 public class PekkoConfiguration {
 
-    private ActorSystem<Void> coordinatorActorSystem;
+    ActorSystem<Void> coordinatorActorSystem;
 
     @Bean
     public ActorSystem<Void> actorSystem() {
         log.info("Initializing Pekko ActorSystem");
 
         // Load Pekko configuration
-        Config config = ConfigFactory.load("application-pekko.conf")
+        Config config = ConfigFactory.load("application-pekko")
+                .resolve()
             .withFallback(ConfigFactory.load());
 
         // Create actor system
-        coordinatorActorSystem = ActorSystem.create(
-            Behaviors.empty(),
-            "AlertMatchingSystem",
-            config
+        this.coordinatorActorSystem = ActorSystem.create(
+                Behaviors.empty(),
+                "AlertMatchingSystem",
+                config
         );
 
         log.info("Pekko ActorSystem initialized successfully");

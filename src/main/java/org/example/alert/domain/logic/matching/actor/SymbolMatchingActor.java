@@ -1,11 +1,13 @@
 package org.example.alert.domain.logic.matching.actor;
 
 import lombok.extern.slf4j.Slf4j;
+import org.apache.pekko.actor.typed.ActorRef;
 import org.apache.pekko.actor.typed.Behavior;
 import org.apache.pekko.actor.typed.javadsl.AbstractBehavior;
 import org.apache.pekko.actor.typed.javadsl.ActorContext;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
 import org.apache.pekko.actor.typed.javadsl.Receive;
+import org.example.alert.domain.logic.manager.actor.AlertManagerActor;
 import org.example.alert.domain.logic.matching.SymbolMatchingState;
 import org.example.alert.domain.model.ActorCommand;
 import org.example.alert.domain.model.enums.AlertStatus;
@@ -46,6 +48,30 @@ public class SymbolMatchingActor extends AbstractBehavior<ActorCommand> {
     }
 
     /**
+     * Command to add or update an alert in the matching cache
+     * Sent directly from AlertFetcherActor via Pekko messaging
+     */
+    public static class AddOrUpdateAlert implements ActorCommand {
+        public final AlertConfig alertConfig;
+
+        public AddOrUpdateAlert(AlertConfig alertConfig) {
+            this.alertConfig = alertConfig;
+        }
+    }
+
+    /**
+     * Command to remove an alert from the matching cache
+     * Sent directly from AlertManagerActor via Pekko messaging
+     */
+    public static class RemoveAlert implements ActorCommand {
+        public final String alertId;
+
+        public RemoveAlert(String alertId) {
+            this.alertId = alertId;
+        }
+    }
+
+    /**
      * Get statistics for monitoring
      */
     public static class GetStats implements ActorCommand {
@@ -60,6 +86,7 @@ public class SymbolMatchingActor extends AbstractBehavior<ActorCommand> {
     // Dependencies
     private final PriceQueue priceQueue;
     private final AlertUserQueue alertUserQueue;
+    private final ActorRef<ActorCommand> alertManagerActor;
 
     // Configuration
     private static final Duration POLL_INTERVAL = Duration.ofSeconds(1);
@@ -70,9 +97,10 @@ public class SymbolMatchingActor extends AbstractBehavior<ActorCommand> {
             String symbol,
             String source,
             PriceQueue priceQueue,
-            AlertUserQueue alertUserQueue) {
+            AlertUserQueue alertUserQueue,
+            ActorRef<ActorCommand> alertManagerActor) {
         return Behaviors.setup(context ->
-            new SymbolMatchingActor(context, symbol, source, priceQueue, alertUserQueue)
+            new SymbolMatchingActor(context, symbol, source, priceQueue, alertUserQueue, alertManagerActor)
         );
     }
 
@@ -81,18 +109,20 @@ public class SymbolMatchingActor extends AbstractBehavior<ActorCommand> {
             String symbol,
             String source,
             PriceQueue priceQueue,
-            AlertUserQueue alertUserQueue) {
+            AlertUserQueue alertUserQueue,
+            ActorRef<ActorCommand> alertManagerActor) {
         super(context);
         this.symbol = symbol;
         this.source = source;
         this.state = new SymbolMatchingState(symbol, source);
         this.priceQueue = priceQueue;
         this.alertUserQueue = alertUserQueue;
+        this.alertManagerActor = alertManagerActor;
 
         // Schedule first poll
         schedulePoll();
 
-        log.info("SymbolMatchingActor started for {}", state.getShardKey());
+        log.debug("SymbolMatchingActor started for {}", state.getShardKey());
     }
 
     // ==================== MESSAGE HANDLERS ====================
@@ -101,6 +131,8 @@ public class SymbolMatchingActor extends AbstractBehavior<ActorCommand> {
     public Receive<ActorCommand> createReceive() {
         return newReceiveBuilder()
             .onMessage(Poll.class, this::onPoll)
+            .onMessage(AddOrUpdateAlert.class, this::onAddOrUpdateAlert)
+            .onMessage(RemoveAlert.class, this::onRemoveAlert)
             .onMessage(GetStats.class, this::onGetStats)
             .build();
     }
@@ -199,13 +231,24 @@ public class SymbolMatchingActor extends AbstractBehavior<ActorCommand> {
             log.info("Matched {} alerts for {}: price={} (previous={})",
                 matchedAlerts.size(), state.getShardKey(), currentPrice, previousPrice);
 
-            // TODO: Forward matched alerts to ø
-            // For now, just log the matches
-            matchedAlerts.forEach(alert ->
+            // Forward matched alerts to AlertManagerActor
+            matchedAlerts.forEach(alert -> {
                 log.info("Alert matched: {} - condition: {} - target: {} - current: {}",
                     alert.getAlertId(), alert.getCondition(),
-                    alert.getTargetPrice(), currentPrice)
-            );
+                    alert.getTargetPrice(), currentPrice);
+
+                // Send notification to AlertManagerActor
+                alertManagerActor.tell(new AlertManagerActor.AlertMatched(
+                    alert.getAlertId(),
+                    alert.getSymbol(),
+                    alert.getSource(),
+                    currentPrice,
+                    previousPrice,
+                    alert.getFrequencyCondition(),
+                    alert.getHitCount(),
+                    alert.getMaxHits()
+                ));
+            });
         }
 
         // Update previous price
@@ -232,6 +275,29 @@ public class SymbolMatchingActor extends AbstractBehavior<ActorCommand> {
                 previousPrice.compareTo(targetPrice) >= 0 &&
                 currentPrice.compareTo(targetPrice) < 0;
         };
+    }
+
+    /**
+     * Handle AddOrUpdateAlert command - Direct Pekko messaging from AlertFetcherActor
+     * Adds or updates alert in in-memory cache immediately
+     */
+    private Behavior<ActorCommand> onAddOrUpdateAlert(AddOrUpdateAlert cmd) {
+        state.addOrUpdateAlert(cmd.alertConfig);
+        log.info("Added/Updated alert {} for {} via direct Pekko message: target={}, condition={}",
+            cmd.alertConfig.getAlertId(), state.getShardKey(),
+            cmd.alertConfig.getTargetPrice(), cmd.alertConfig.getCondition());
+        return this;
+    }
+
+    /**
+     * Handle RemoveAlert command - Direct Pekko messaging from AlertManagerActor
+     * Removes alert from in-memory cache immediately
+     */
+    private Behavior<ActorCommand> onRemoveAlert(RemoveAlert cmd) {
+        state.removeAlert(cmd.alertId);
+        log.info("Removed alert {} from {} via direct Pekko message",
+            cmd.alertId, state.getShardKey());
+        return this;
     }
 
     /**

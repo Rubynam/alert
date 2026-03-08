@@ -856,7 +856,7 @@ public class SymbolMatchingCoordinator {
                 String source = parts[0];
                 String symbol = parts[1];
 
-                log.info("Initializing SymbolMatchingActor for {}", entityContext.getEntityId());
+                log.debug("Initializing SymbolMatchingActor for {}", entityContext.getEntityId());
 
                 return SymbolMatchingActor.create(
                     symbol,

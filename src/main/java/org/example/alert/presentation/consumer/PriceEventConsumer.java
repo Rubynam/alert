@@ -1,6 +1,7 @@
 package org.example.alert.presentation.consumer;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.tuple.ImmutablePair;
@@ -60,7 +61,7 @@ public class PriceEventConsumer {
      * Initialize the consumer actor on application startup
      */
     @EventListener(ApplicationReadyEvent.class)
-    void init() {
+    public void init() {
         log.info("Initializing PriceEventConsumerActor");
 
         // Create the consumer actor
@@ -77,7 +78,7 @@ public class PriceEventConsumer {
     /**
      * Start consuming messages from Kafka
      */
-    void startConsuming() {
+    public void startConsuming() {
         log.info("Starting Chart1m Kafka consumer for topic: {} with fault-tolerant restart strategy", inboundTopic);
 
         // Configure Kafka consumer settings with fault tolerance
@@ -87,7 +88,7 @@ public class PriceEventConsumer {
                         .withGroupId(consumerGroup)
                         // IMPORTANT: Use 'earliest' for recovery - consume from last committed offset
                         // This ensures messages in the gap time (during downtime) are processed
-                        .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+                        .withProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
                         .withProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
                         .withProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "500")
                         // Increase session timeout for resilience during slow processing
@@ -113,6 +114,7 @@ public class PriceEventConsumer {
                             return Consumer.committableSource(consumerSettings, Subscriptions.topics(inboundTopic))
                                     // Backpressure: Buffer up to N messages
                                     .buffer(backpressureBufferSize, OverflowStrategy.backpressure())
+                                    // Parse JSON to Candle1m
                                     .map(msg -> {
                                         try {
                                             String json = msg.record().value();
@@ -155,6 +157,13 @@ public class PriceEventConsumer {
                 .run(actorSystem);
     }
 
-    private record MessageWithCommit(PriceEventMessage event, ConsumerMessage.CommittableOffset committableOffset) {
+    private static class MessageWithCommit {
+        final PriceEventMessage event;
+        final ConsumerMessage.CommittableOffset committableOffset;
+
+        MessageWithCommit(PriceEventMessage event, ConsumerMessage.CommittableOffset committableOffset) {
+            this.event = event;
+            this.committableOffset = committableOffset;
+        }
     }
 }

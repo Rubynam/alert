@@ -76,3 +76,19 @@ public class PriceAlertEntity {
    - The batch size is 100 per actor.
    - Every second, actor call fetch data from DB
  - Action 2: After fetching sucess, actor push the whole data into AlertUserQueue.
+
+## Task 6: Implement AlertManagerActor
+- Requirement: After matched alert, you need update the new status to DB
+- Action: 
+  - For the entity in user_alert, you must update hitCount+=1. If entify have a frequency_condition which is ONLY_ONE, max_count =1 and you change the status to TRIGGERED. Other you must to update the status is TRIGGERED. and then invoke repo to update 
+  - For the AlertConfig you need to update the operation is REMOVE, and send a signal to SymbolMatchingActor to remove this alert in queue.
+
+## Task 6.1 Enhance the AlertMayerActor
+ - Action: AlertMayerActor need to read the local queue in a local data shard.
+   - You need to send a signal to SymbolMatchingActor via Pekko, and notify other shard if needed.
+   - *DO NOT* implement stats to measure.
+
+## Task 6.2 Enhance the AlertFetcherActor
+- Action: AlertFetcherActor add data to queue
+   - You need to send a signal to SymbolMatchingActor via Pekko, and notify other shard if needed.
+   - *DO NOT* implement stats to measure.
