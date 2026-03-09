@@ -246,6 +246,8 @@ public class ClusterBatchFetcherActor extends AbstractBehavior<ActorCommand> {
                 .maxHits(entity.getMaxHits() != null ? entity.getMaxHits() : 10)
                 .operation(AlertConfig.Operation.ADD)
                 .queuedAt(Instant.now())
+                .createdAt(entity.getCreatedAt())
+                .updatedAt(entity.getUpdatedAt())
                 .build();
 
             // Send to UserAlertQueueActor via Pekko messaging

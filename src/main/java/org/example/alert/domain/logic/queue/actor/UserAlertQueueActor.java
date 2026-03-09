@@ -13,7 +13,9 @@ import org.example.alert.domain.model.queue.AlertConfig;
 import org.example.alert.domain.model.queue.InternalPriceEvent;
 
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentSkipListSet;
 import java.util.concurrent.LinkedBlockingQueue;
 
 /**
@@ -96,6 +98,7 @@ public class UserAlertQueueActor extends AbstractBehavior<ActorCommand> {
      * Map of queues: key = "source:symbol", value = queue of alerts
      */
     private final Map<String, LinkedBlockingQueue<AlertConfig>> mapQueue;
+    private final Set<String> uniqueAlertId = new ConcurrentSkipListSet<>();
 
     // ==================== BEHAVIOR FACTORY ====================
 
@@ -133,6 +136,10 @@ public class UserAlertQueueActor extends AbstractBehavior<ActorCommand> {
                 key,
                 k -> new LinkedBlockingQueue<>()
             );
+
+            if (uniqueAlertId.contains(cmd.alertConfig.getAlertId())) {
+                return Behaviors.stopped();
+            }
 
             // Add to queue
             queue.offer(cmd.alertConfig);

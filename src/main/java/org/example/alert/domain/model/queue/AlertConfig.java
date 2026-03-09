@@ -39,4 +39,6 @@ public class AlertConfig implements Serializable {
     private int maxHits;                        // Maximum hits allowed
     private Operation operation;                // ADD, UPDATE, REMOVE
     private Instant queuedAt;                  // When queued
+    private Instant createdAt;
+    private Instant updatedAt;
 }
