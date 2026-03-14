@@ -127,4 +127,17 @@ Create matching folder with new logic.
 ## Task 9.1 PriceQueueActor
 Requirement: onDequeue should be returned the data
 Action: You must adjust the method onDequeue and return to the sender.
+## Task 10. Write LinkedBlockingQueue<InternalPriceEvent> queue in PriceQueueActor.class
+- Requirement: We have two actors, PriceQueueActor, when enqueue called, you must persist price event data to levelDB sharding data
+- Action: 
+  - set up ClusterSharding with two new actors (responsible insert data and fetch data),  named *persistedActor* 
+    - The Actor trigger when Enqueue command , persistedActor trigger the insert flow
+    - The Actor trigger when Dequeue command, persistedActor poll data from level in queue with batchsize to LinkedBlockingQueue.
+
+## Task 11: PriceQueueActor, persistenceActor.ask not work
+- Requirement: Fetch data's queue from sharding data
+- Action: persistenceActor.ask does not work, you need to fix it.
+## Task 11.1: PriceQueueActor, PriceEventPersistenceActor
+- Requirement: Remove in-memory queue at PriceQueueActor.
+- Action: Remove Queue in PriceQueueActor, action enqueue and dequeue have to operation sharded file
       

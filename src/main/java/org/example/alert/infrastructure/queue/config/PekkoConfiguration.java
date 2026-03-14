@@ -6,6 +6,9 @@ import jakarta.annotation.PreDestroy;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.pekko.actor.typed.ActorSystem;
 import org.apache.pekko.actor.typed.javadsl.Behaviors;
+import org.apache.pekko.cluster.sharding.typed.javadsl.ClusterSharding;
+import org.apache.pekko.cluster.sharding.typed.javadsl.Entity;
+import org.example.alert.domain.logic.queue.actor.PriceEventPersistenceActor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -18,6 +21,7 @@ import org.springframework.context.annotation.Configuration;
 public class PekkoConfiguration {
 
     ActorSystem<Void> coordinatorActorSystem;
+    private ClusterSharding clusterSharding;
 
     @Bean
     public ActorSystem<Void> actorSystem() {
@@ -35,9 +39,41 @@ public class PekkoConfiguration {
                 config
         );
 
+        // Initialize ClusterSharding
+        initializeClusterSharding();
+
         log.info("Pekko ActorSystem initialized successfully");
 
         return coordinatorActorSystem;
+    }
+
+    /**
+     * Initialize ClusterSharding for persistence actors (Task 10)
+     */
+    private void initializeClusterSharding() {
+        log.info("Initializing ClusterSharding for PriceEventPersistenceActor");
+
+        this.clusterSharding = ClusterSharding.get(coordinatorActorSystem);
+
+        // Initialize PriceEventPersistenceActor sharding (Task 10)
+        // Note: We just call init() to register the entity type with cluster sharding
+        // The shard region will be accessed via ClusterSharding.entityRefFor() when needed
+        clusterSharding.init(
+            Entity.of(
+                PriceEventPersistenceActor.TYPE_KEY,
+                entityContext -> PriceEventPersistenceActor.create(entityContext.getEntityId())
+            )
+        );
+
+        log.info("ClusterSharding initialized for PriceEventPersistenceActor");
+    }
+
+    /**
+     * Get ClusterSharding instance
+     */
+    @Bean
+    public ClusterSharding clusterSharding() {
+        return clusterSharding;
     }
 
     @PreDestroy
